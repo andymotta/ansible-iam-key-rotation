@@ -1,34 +1,24 @@
 import boto3
 from botocore.exceptions import ClientError
-import logging
 import os
 from datetime import datetime
 import shutil
 from ConfigParser import SafeConfigParser
 
-logging.basicConfig()
-logger = logging.getLogger()
-
 key_file = os.path.join(os.environ['HOME'], 'creds')
 access_file = os.path.join(os.environ['HOME'], '.aws', 'credentials')
 
-parser = SafeConfigParser()
-parser.read(key_file)
-access_list = SafeConfigParser()
-access_list.read(access_file)
+keys_parser = SafeConfigParser()
+keys_parser.read(key_file)
+access_parser = SafeConfigParser()
+access_parser.read(access_file)
 
 timeStamp =  datetime.fromtimestamp(os.path.getmtime(key_file)).strftime("%b-%d-%y-%H:%M:%S")
 key_bak = "%s_%s.bak" % (key_file, timeStamp)
 
-def generate_profile_list():
+def generate_list_from_parser(parser):
     lst = []
     for profile in parser.sections():
-        lst.append(profile)
-    return lst
-
-def generate_access_list():
-    lst = []
-    for profile in access_list.sections():
         lst.append(profile)
     return lst
 
@@ -51,7 +41,6 @@ def num_keys():
         for response in paginator.paginate(UserName=user):
             return len(response['AccessKeyMetadata'])
     except ClientError as e:
-        logger.error("Received error: %s", e, exc_info=True)
         if e.response['Error']['Code'] == 'ParamValidationError':
             raise
 
@@ -65,7 +54,6 @@ def create_access_key(user):
         SecretAccessKey = response['AccessKey']['SecretAccessKey']
         return AccessKey, SecretAccessKey
     except ClientError as e:
-        logger.error("Received error: %s", e, exc_info=True)
         if e.response['Error']['Code'] == 'LimitExceededException':
             print "User already has two keys, cannot add more"
 
@@ -78,20 +66,25 @@ def update_access_key(key, user):
             UserName=user
         )
 
-def write_creds(profile, keyid, secret):
-    parser.set(profile, 'aws_access_key_id', keyid)
-    parser.set(profile, 'aws_secret_access_key', secret)
-    # Writing our configuration file to 'example.ini'
-    with open(key_file, 'wb') as configfile:
-        parser.write(configfile)
+def write_creds(profile, keyid, secret, keyfile):
+    keys_parser.set(profile, 'aws_access_key_id', keyid)
+    keys_parser.set(profile, 'aws_secret_access_key', secret)
+    with open(keyfile, 'wb') as configfile:
+        keys_parser.write(configfile)
 
 #### This should be the start of the main function ####
 # first create backup
 shutil.copy(key_file, key_bak)
 
+# Target one or all the profiles?
+if os.getenv("AWS_PROFILE"):
+    profiles = os.environ["AWS_PROFILE"]
+    profiles = [profiles]
+else:
+    profiles = generate_list_from_parser(keys_parser)
+
 # 1. For each profile in AWS credentials, get user.
-profiles = generate_profile_list()
-access = generate_access_list()
+access = generate_list_from_parser(access_parser)
 keys = []
 for p in profiles:
     if p == 'default':
@@ -109,18 +102,21 @@ for p in profiles:
     session = boto3.session.Session()
     iam = session.client('iam')
     # Get the user from the key on the host
-    user = find_user(key)
+    if find_user(key):
+        user = find_user(key)
+    else:
+        print "Not rotating %s. Moving on..." % key
+        continue
     # 2. Can we add a key for this user?  If yes, create key.  If not, log.
     if num_keys() == 2:
         print "Cannot add more keys for " + user + " " + key
         continue
-    print p +": " + key + " " + user, num_keys()
     # 3. Add a secondary key for the users we can add keys to
     creds = create_access_key(user)
-    print "Created: " + creds[0] + "in: " + p
+    print "Created: " + creds[0] + " in: " + p
     # 5. deactivate the original keys for each user
     update_access_key(key, user)
     print "Successfully deactivated " + key + " in " + p
     # 6. rotate user and secret of each profile
     print "Writing creds to " + key_file + "..."
-    write_creds(p, creds[0], creds[1])
+    write_creds(p, creds[0], creds[1], key_file)

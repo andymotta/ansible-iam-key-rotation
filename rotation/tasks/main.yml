@@ -5,13 +5,13 @@
 
   - name: Get ~/.aws/credentials
     fetch:
-      src: /var/lib/jenkins/.aws/credentials
-      dest: /var/lib/jenkins/creds
+      src: "{{ dest_home_dir }}/.aws/credentials"
+      dest: creds
       flat: yes
       fail_on_missing: yes
 
   - name: Run Python Rotation Script
-    shell: python rotate.py | tee -a "/var/lib/jenkins/{{ ansible_date_time.date }}_rotation.log"
+    shell: python rotate.py | tee -a "{{ ansible_date_time.date }}_rotation.log"
     args:
       chdir: "{{ role_path }}/files/"
     delegate_to: 127.0.0.1
@@ -22,10 +22,10 @@
 
   - name: Put back rotated credentials
     copy:
-      src: /var/lib/jenkins/creds
-      dest: /var/lib/jenkins/.aws/credentials
-      owner: jenkins
-      group: sudo
+      src: creds
+      dest: "{{ dest_home_dir }}/.aws/credentials"
+      owner: "{{ dest_owner }}"
+      group: "{{ dest_group }}"
       mode: 0751
       backup: yes
 
@@ -34,4 +34,4 @@
       path: "{{ item }}"
       state: absent
     with_items:
-      - /var/lib/jenkins/creds
+      - creds

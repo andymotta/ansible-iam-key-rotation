@@ -21,3 +21,9 @@ Usage
     # IAM Key Rotation
     - { role: rotation, tags: rotation }
 ```
+
+### Variables
+Defaults can be overridden at any level
+- *dest_home_dir*: The home dir of the remote credentials file being targeted for rotation.  Local destination is OK.
+- *dest_owner*: Owner permissions of the credentials file
+- *dest_group*: Group permissions of the credentials file

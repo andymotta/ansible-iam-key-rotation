@@ -1,0 +1,5 @@
+---
+
+  dest_home_dir: "/var/lib/jenkins"
+  dest_owner: jenkins
+  dest_group: sudo
