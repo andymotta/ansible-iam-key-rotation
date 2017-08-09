@@ -36,14 +36,13 @@ def get_aws_access_key_id(profile):
     return parser.get(profile, 'aws_access_key_id')
 
 def find_user(key):
-    users = iam.list_users()["Users"]
-    for user in users:
-        username = user['UserName']
-        for key_result in iam.list_access_keys(UserName=username)['AccessKeyMetadata']:
-            aws_access_key = key_result['AccessKeyId']
-            if aws_access_key == key:
-                return username
-    return "No match found"
+    try:
+        key_info = iam.get_access_key_last_used(AccessKeyId=key)
+        return key_info['UserName']
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'AccessDenied':
+            print "%s does not exist in target account" % key
+            return False
 
 def num_keys():
     # See if IAM user already has more than one key
