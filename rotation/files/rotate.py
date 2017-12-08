@@ -44,6 +44,23 @@ def num_keys():
         if e.response['Error']['Code'] == 'ParamValidationError':
             raise
 
+def delete_inactive_access_key(user):
+    try:
+        for access_key in iam.list_access_keys(UserName = user)['AccessKeyMetadata']:
+            if access_key['Status'] == 'Inactive':
+                # Do we care when the access key was last used before deleting it?
+                # response = iam.get_access_key_last_used(AccessKeyId = access_key['AccessKeyId'])
+                # Delete the access key.
+                print('Deleting access key {0}.'.format(access_key['AccessKeyId']))
+                response = iam.delete_access_key(
+                    UserName = user,
+                    AccessKeyId = access_key['AccessKeyId']
+                )
+    except ClientError as e:
+        raise
+        if e.response['Error']['Code'] == 'InvalidClientTokenId':
+            print "Not authorized to perform iam maintainence"
+
 # Create an access key
 def create_access_key(user):
     try:
@@ -107,10 +124,14 @@ for p in profiles:
     else:
         print "Not rotating %s. Moving on..." % key
         continue
-    # 2. Can we add a key for this user?  If yes, create key.  If not, log.
+    # 2. Can we add a key for this user?  If not, delete the inactive one
     if num_keys() == 2:
-        print "Cannot add more keys for " + user + " " + key
-        continue
+        print "User " + user +" in "+ p +" account " + "has this many keys:", num_keys() # num_keys debugging
+        try:
+            delete_inactive_access_key(user)
+        except:
+            print "Cannot delete inactive access key for " + user
+            continue
     # 3. Add a secondary key for the users we can add keys to
     creds = create_access_key(user)
     print "Created: " + creds[0] + " in: " + p
